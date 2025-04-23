@@ -84,97 +84,101 @@ try {
 <body class="bg-lighter font-sans bg-primary text-lighter font-space">
     <!-- Navigation Bar -->
     <nav class="bg-primary text-white shadow-lg fixed top-0 left-0 w-full z-50">
-    <div class="container mx-auto px-6 py-4">
-        <div class="flex items-center justify-between">
-            <!-- Logo Section -->
-            <div class="flex items-center">
-                <i class="fas fa-graduation-cap text-2xl text-accent mr-2"></i>
-                <span class="font-semibold text-xl tracking-tight">DropTrace</span>
-            </div>
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <!-- Logo Section -->
+                <div class="flex items-center">
+                    <i class="fas fa-graduation-cap text-2xl text-accent mr-2"></i>
+                    <span class="font-semibold text-xl tracking-tight">DropTrace</span>
+                </div>
 
-            <!-- Navigation Links and Buttons -->
-            <div class="flex items-center space-x-6">
-                <a href="index.php" class="text-light hover:text-white font-medium">Home</a>
-                <a href="analysis.php" class="text-light hover:text-white font-medium">Analysis</a>
-                <a href="intervensions.php" class="text-light hover:text-white font-medium">Interventions</a>
-                <a href="aboutus.php" class="text-light hover:text-white font-medium">About Us</a>
-                <?php if (isset($_SESSION['user_id'])): ?>
-                    <a href="logout.php" class="text-light hover:text-white font-medium">Logout</a>
-                <?php else: ?>
-                    <a href="login.php" class="bg-accent hover:bg-tertiary text-white px-4 py-2 rounded">Login</a>
-                <?php endif; ?>
-                <!-- Dark Mode Toggle Button -->
-                <button id="theme-toggle" class="text-white focus:outline-none">
-                    <i id="theme-icon" class="fas fa-sun"></i>
-                </button>
+                <!-- Navigation Links and Buttons -->
+                <div class="flex items-center space-x-6">
+                    <a href="index.php" class="text-white font-medium">Home</a>
+                    <a href="analysis.php" class="text-light hover:text-white font-medium">Analysis</a>
+                    <a href="intervensions.php" class="text-light hover:text-white font-medium">Interventions</a>
+                    <a href="aboutus.php" class="text-light hover:text-white font-medium">About Us</a>
+                    <a href="resources.php" class="text-light hover:text-white font-medium">Resources</a>
+                    <a href="contact.php" class="text-light hover:text-white font-medium">Contact</a>
+                    <a href="pdf_analysis.php" class="text-light hover:text-white font-medium">PDF Analysis</a>
+                    <?php if (isset($_SESSION['user_id'])): ?>
+                        <a href="profile.php" class="text-light hover:text-white font-medium">Profile</a>
+                        <a href="logout.php" class="text-light hover:text-white font-medium">Logout</a>
+                    <?php else: ?>
+                        <a href="login.php" class="bg-accent hover:bg-tertiary text-white px-4 py-2 rounded">Login</a>
+                    <?php endif; ?>
+                    <!-- Dark Mode Toggle Button -->
+                    <button id="theme-toggle" class="text-white focus:outline-none">
+                        <i id="theme-icon" class="fas fa-sun"></i>
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
-</nav>
+    </nav>
 
-<script>
-    // Theme toggle logic
-    const themeToggle = document.getElementById('theme-toggle');
-    const themeIcon = document.getElementById('theme-icon');
-    const body = document.body;
+    <script>
+        // Theme toggle logic
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+        const body = document.body;
 
-    // Check for saved theme in localStorage
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-        body.classList.add(savedTheme);
-        themeIcon.className = savedTheme === 'dark-mode' ? 'fas fa-moon' : 'fas fa-sun';
-    }
-
-    themeToggle.addEventListener('click', () => {
-        if (body.classList.contains('dark-mode')) {
-            body.classList.remove('dark-mode');
-            localStorage.setItem('theme', 'light-mode');
-            themeIcon.className = 'fas fa-sun';
-        } else {
-            body.classList.add('dark-mode');
-            localStorage.setItem('theme', 'dark-mode');
-            themeIcon.className = 'fas fa-moon';
+        // Check for saved theme in localStorage
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            body.classList.add(savedTheme);
+            themeIcon.className = savedTheme === 'dark-mode' ? 'fas fa-moon' : 'fas fa-sun';
         }
-    });
-</script>
 
-<style>
-    /* Light Mode (Default) */
-    body {
-        background-color: #f9fafb;
-        color: #1a202c;
-    }
+        themeToggle.addEventListener('click', () => {
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light-mode');
+                themeIcon.className = 'fas fa-sun';
+            } else {
+                body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark-mode');
+                themeIcon.className = 'fas fa-moon';
+            }
+        });
+    </script>
 
-    /* Dark Mode */
-    body.dark-mode {
-        background-color: #1a202c;
-        color: #f9fafb;
-    }
+    <style>
+        /* Light Mode (Default) */
+        body {
+            background-color: #f9fafb;
+            color: #1a202c;
+        }
 
-    body.dark-mode .bg-primary {
-        background-color: #2d3748;
-    }
+        /* Dark Mode */
+        body.dark-mode {
+            background-color: #1a202c;
+            color: #f9fafb;
+        }
 
-    body.dark-mode .bg-secondary {
-        background-color: #4a5568;
-    }
+        body.dark-mode .bg-primary {
+            background-color: #2d3748;
+        }
 
-    body.dark-mode .bg-tertiary {
-        background-color: #2d3748;
-    }
+        body.dark-mode .bg-secondary {
+            background-color: #4a5568;
+        }
 
-    body.dark-mode .text-light {
-        color: #e2e8f0;
-    }
+        body.dark-mode .bg-tertiary {
+            background-color: #2d3748;
+        }
 
-    body.dark-mode .text-lighter {
-        color: #cbd5e0;
-    }
+        body.dark-mode .text-light {
+            color: #e2e8f0;
+        }
 
-    body.dark-mode a:hover {
-        color: #63b3ed;
-    }
-</style>
+        body.dark-mode .text-lighter {
+            color: #cbd5e0;
+        }
+
+        body.dark-mode a:hover {
+            color: #63b3ed;
+        }
+    </style>
     <!-- Hero Section -->
     <section class="hero-bg text-white py-24">
         <div class="container mx-auto px-6 text-center">

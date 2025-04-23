@@ -1,87 +1,110 @@
 <?php
 session_start();
 
+// Database connection
+$db_host = 'localhost';
+$db_user = 'root';
+$db_pass = '';
+$db_name = 'dropout_analysis';
+
+try {
+    $conn = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch(PDOException $e) {
+    die("Connection failed: " . $e->getMessage());
+}
+
 // Function to load real data from a CSV file
 function loadRealData($filename) {
     $data = [];
-    if (($handle = fopen($filename, "r")) !== FALSE) {
-        $header = fgetcsv($handle, 1000, ","); // Read the header row
-        while (($row = fgetcsv($handle, 1000, ",")) !== FALSE) {
-            $state = $row[0];
-            $data[$state] = [
-                'dropout_rates' => [
-                    'primary' => (float)$row[2], // Assuming primary dropout rate is in column 3
-                    'upper_primary' => (float)$row[3], // Assuming upper primary dropout rate is in column 4
-                    'secondary' => (float)$row[4], // Assuming secondary dropout rate is in column 5
-                ],
-                'causes' => [
-                    ['name' => 'Economic Constraints', 'percentage' => (int)$row[5]], // Assuming causes start from column 6
-                    ['name' => 'Lack of Interest', 'percentage' => (int)$row[6]],
-                    ['name' => 'Distance to School', 'percentage' => (int)$row[7]],
-                    ['name' => 'Gender Inequality', 'percentage' => (int)$row[8]],
-                    ['name' => 'Others', 'percentage' => (int)$row[9]]
-                ],
-                'strategies' => explode(';', $row[10]), // Assuming strategies are in column 11
-                'strategies' => [
-                'Financial Assistance',
-                'Community Engagement',
-                'Infrastructure Development',
-                'Curriculum Enhancement',
-                'Safety Measures'
-            ],
-                'image' => 'img/' . strtolower(str_replace(' ', '_', $state)) . '.png',
-                'national_comparison' => [
-                    'primary' => 'Varies by state',
-                    'upper_primary' => 'Varies by state',
-                    'secondary' => 'Varies by state'
-                ]
-            ];
+    if (file_exists($filename)) {
+        if (($handle = fopen($filename, "r")) !== FALSE) {
+            $header = fgetcsv($handle, 1000, ",");
+            while (($row = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                if (count($row) >= 11) { // Ensure row has enough columns
+                    $state = $row[0];
+                    $data[$state] = [
+                        'dropout_rates' => [
+                            'primary' => (float)$row[2],
+                            'upper_primary' => (float)$row[3],
+                            'secondary' => (float)$row[4],
+                        ],
+                        'causes' => [
+                            ['name' => 'Economic Constraints', 'percentage' => (int)$row[5]],
+                            ['name' => 'Lack of Interest', 'percentage' => (int)$row[6]],
+                            ['name' => 'Distance to School', 'percentage' => (int)$row[7]],
+                            ['name' => 'Gender Inequality', 'percentage' => (int)$row[8]],
+                            ['name' => 'Others', 'percentage' => (int)$row[9]]
+                        ],
+                        'strategies' => [
+                            'Financial Assistance',
+                            'Community Engagement',
+                            'Infrastructure Development',
+                            'Curriculum Enhancement',
+                            'Safety Measures'
+                        ],
+                        'image' => 'img/' . strtolower(str_replace(' ', '_', $state)) . '.png',
+                        'national_comparison' => [
+                            'primary' => 'Varies by state',
+                            'upper_primary' => 'Varies by state',
+                            'secondary' => 'Varies by state'
+                        ]
+                    ];
+                }
+            }
+            fclose($handle);
         }
-        fclose($handle);
     }
     return $data;
 }
-
-// Load real data into the $states array
-$states = loadRealData('C:\xampp\htdocs\DropTrace\sd\DOR.csv');
-if (!file_exists('C:\xampp\htdocs\DropTrace\sd\DOR.csv')) {
-    die('CSV file not found.');
-}
-
 
 // Function to load school type data from a CSV file
 function loadSchoolTypeData($filename) {
     $data = [];
-    if (($handle = fopen($filename, "r")) !== FALSE) {
-        $header = fgetcsv($handle, 1000, ","); // Read the header row
-        while (($row = fgetcsv($handle, 1000, ",")) !== FALSE) {
-            $schoolType = $row[0];
-            $data[$schoolType] = [
-                'dropout_rates' => [
-                    'primary' => (float)$row[1],
-                    'upper_primary' => (float)$row[2],
-                    'secondary' => (float)$row[3],
-                ],
-                'causes' => [
-                    ['name' => 'Poor Infrastructure', 'percentage' => (int)$row[4]],
-                    ['name' => 'Economic Constraints', 'percentage' => (int)$row[5]],
-                    ['name' => 'Teacher Quality', 'percentage' => (int)$row[6]],
-                    ['name' => 'Others', 'percentage' => (int)$row[7]]
-                ],
-                'strategies' => explode(';', $row[8]) // Split strategies by semicolon
-            ];
+    if (file_exists($filename)) {
+        if (($handle = fopen($filename, "r")) !== FALSE) {
+            $header = fgetcsv($handle, 1000, ",");
+            while (($row = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                if (count($row) >= 9) { // Ensure row has enough columns
+                    $schoolType = $row[0];
+                    $data[$schoolType] = [
+                        'dropout_rates' => [
+                            'primary' => (float)$row[1],
+                            'upper_primary' => (float)$row[2],
+                            'secondary' => (float)$row[3],
+                        ],
+                        'causes' => [
+                            ['name' => 'Poor Infrastructure', 'percentage' => (int)$row[4]],
+                            ['name' => 'Economic Constraints', 'percentage' => (int)$row[5]],
+                            ['name' => 'Teacher Quality', 'percentage' => (int)$row[6]],
+                            ['name' => 'Others', 'percentage' => (int)$row[7]]
+                        ],
+                        'strategies' => explode(';', $row[8])
+                    ];
+                }
+            }
+            fclose($handle);
         }
-        fclose($handle);
     }
     return $data;
 }
 
-// Load school type data into the $schoolTypeData array
-$schoolTypeData = loadSchoolTypeData('C:\xampp\htdocs\DropTrace\sd\dataset.csv');
-if (!file_exists('C:\xampp\htdocs\DropTrace\sd\dataset.csv')) {
-    die('CSV file not found.');
+// Load data with error handling
+try {
+    $states = loadRealData('DOR.csv');
+    $schoolTypeData = loadSchoolTypeData('dataset.csv');
+    
+    if (empty($states) || empty($schoolTypeData)) {
+        throw new Exception("Failed to load data from CSV files");
+    }
+} catch (Exception $e) {
+    // Log the error
+    error_log("Error loading data: " . $e->getMessage());
+    
+    // Use fallback data
+    $states = [];
+    $schoolTypeData = [];
 }
-
 
 // List of all Indian states and union territories (36 as of 2025)
 $allStates = [
@@ -156,7 +179,7 @@ $genderData = [
             ['name' => 'Safety Concerns', 'percentage' => 25],
             ['name' => 'Others', 'percentage' => 10]
         ],
-        'strategies' => ['Safety Measures', 'Girls’ Education Programs', 'Community Awareness']
+        'strategies' => ['Safety Measures', 'Girls\' Education Programs', 'Community Awareness']
     ],
     'Others' => [
         'dropout_rates' => ['primary' => 28.0, 'upper_primary' => 41.0, 'secondary' => 50.0],
@@ -395,6 +418,7 @@ $schoolTypeData = [
                     <a href="analysis.php" class="text-light hover:text-white">Analysis</a>
                     <a href="intervensions.php" class="text-light hover:text-white">Interventions</a>
                     <a href="aboutus.php" class="text-light hover:text-white font-medium">About Us</a>
+                    <a href="pdf_analysis.php" class="text-light hover:text-white font-medium">PDF Analysis</a>
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <a href="logout.php" class="text-light hover:text-white">Logout</a>
                     <?php else: ?>

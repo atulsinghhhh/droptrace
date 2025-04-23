@@ -5,42 +5,49 @@ session_start();
 $db_host = 'localhost';
 $db_user = 'root';
 $db_pass = '';
-$db_name = 'dropout';
+$db_name = 'dropout_analysis';
+
+try {
+    $conn = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch(PDOException $e) {
+    $error = "Connection failed: " . $e->getMessage();
+}
 
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+    $username = $_POST['username'] ?? '';
+    $password = $_POST['password'] ?? '';
     
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
-    
-    $username = $conn->real_escape_string($_POST['username']);
-    $password = $_POST['password'];
-    
-    $sql = "SELECT id, username, password, role FROM users WHERE username = '$username'";
-    $result = $conn->query($sql);
-    
-    if ($result->num_rows == 1) {
-        $user = $result->fetch_assoc();
-        
-        if (password_verify($password, $user['password'])) {
-            // Set session variables
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
-            
-            // Redirect to index.php after successful login
-            header('Location: index.php');
-            exit();
-        } else {
-            $error = "Invalid username or password";
-        }
+    if (empty($username) || empty($password)) {
+        $error = "Please enter both username and password";
     } else {
-        $error = "Invalid username or password";
+        try {
+            $stmt = $conn->prepare("SELECT id, username, password, role FROM users WHERE username = ?");
+            $stmt->execute([$username]);
+            
+            if ($stmt->rowCount() == 1) {
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (password_verify($password, $user['password'])) {
+                    // Set session variables
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['role'] = $user['role'];
+                    
+                    // Redirect to index.php after successful login
+                    header('Location: index.php');
+                    exit();
+                } else {
+                    $error = "Invalid username or password";
+                }
+            } else {
+                $error = "Invalid username or password";
+            }
+        } catch(PDOException $e) {
+            $error = "Error: " . $e->getMessage();
+        }
     }
-    
-    $conn->close();
 }
 ?>
 

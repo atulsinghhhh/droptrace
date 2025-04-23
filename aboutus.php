@@ -52,6 +52,7 @@ session_start();
                     <a href="analysis.php" class="text-light hover:text-white">Analysis</a>
                     <a href="intervensions.php" class="text-light hover:text-white">Interventions</a>
                     <a href="aboutus.php" class="text-light hover:text-white">About Us</a>
+                    <a href="pdf_analysis.php" class="text-light hover:text-white font-medium">PDF Analysis</a>
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <a href="logout.php" class="bg-red-500 hover:bg-red-700 text-white px-4 py-2 rounded">Logout</a>
                     <?php else: ?>

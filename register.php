@@ -5,40 +5,53 @@ session_start();
 $db_host = 'localhost';
 $db_user = 'root';
 $db_pass = '';
-$db_name = 'dropout';
+$db_name = 'dropout_analysis';
+
+try {
+    $conn = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch(PDOException $e) {
+    $error = "Connection failed: " . $e->getMessage();
+}
 
 // Handle registration form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
-
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
-
-    $username = $conn->real_escape_string($_POST['username']);
-    $password = password_hash($_POST['password'], PASSWORD_BCRYPT);
-    $email = $conn->real_escape_string($_POST['email']);
+    $username = $_POST['username'] ?? '';
+    $email = $_POST['email'] ?? '';
+    $password = $_POST['password'] ?? '';
     $role = 'user'; // Default role for new users
 
-    // Check if username or email already exists
-    $check_sql = "SELECT id FROM users WHERE username = '$username' OR email = '$email'";
-    $check_result = $conn->query($check_sql);
-
-    if ($check_result->num_rows > 0) {
-        $error = "Username or email already exists. Please try again.";
+    // Validate password
+    if (strlen($password) < 8) {
+        $error = "Password must be at least 8 characters long";
     } else {
-        // Insert new user into the database
-        $sql = "INSERT INTO users (username, password, email, role) VALUES ('$username', '$password', '$email', '$role')";
-        if ($conn->query($sql) === TRUE) {
-            // Redirect to login.php after successful registration
-            header('Location: login.php');
-            exit();
-        } else {
-            $error = "Error: " . $conn->error;
+        // Hash the password
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+        try {
+            // Check if username or email already exists
+            $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+            $stmt->execute([$username, $email]);
+            
+            if ($stmt->rowCount() > 0) {
+                $error = "Username or email already exists. Please try again.";
+            } else {
+                // Insert new user into the database with hashed password
+                $stmt = $conn->prepare("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$username, $hashed_password, $email, $role]);
+                
+                // Create empty profile for the new user
+                $user_id = $conn->lastInsertId();
+                $stmt = $conn->prepare("INSERT INTO user_profiles (user_id) VALUES (?)");
+                $stmt->execute([$user_id]);
+                
+                // Set success message
+                $success = "User registered successfully! You can now login.";
+            }
+        } catch(PDOException $e) {
+            $error = "Error: " . $e->getMessage();
         }
     }
-
-    $conn->close();
 }
 ?>
 
@@ -130,6 +143,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <?php if (isset($error)): ?>
                 <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
                     <p><?php echo htmlspecialchars($error); ?></p>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (isset($success)): ?>
+                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded">
+                    <p><?php echo htmlspecialchars($success); ?></p>
                 </div>
             <?php endif; ?>
             

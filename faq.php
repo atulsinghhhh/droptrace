@@ -70,7 +70,7 @@ session_start();
                     <a href="analysis.php" class="text-light hover:text-white font-medium">Analysis</a>
                     <a href="intervensions.php" class="text-light hover:text-white font-medium">Interventions</a>
                     <a href="aboutus.php" class="text-light hover:text-white font-medium">About Us</a>
-                    
+                    <a href="pdf_analysis.php" class="text-light hover:text-white font-medium">PDF Analysis</a>
                     <?php if (isset($_SESSION['user_id'])): ?>
                     <a href="logout.php" class="text-light hover:text-white">Logout</a>
                     <?php else: ?>
