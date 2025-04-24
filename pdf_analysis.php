@@ -167,11 +167,11 @@ try {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .drag-active {
-            border-color: #4A5C6A !important;
-            background-color: #233745 !important;
+            border-color: #7C3AED !important;
+            background-color: #5B21B6 !important;
         }
         .gradient-bg {
-            background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+            background: linear-gradient(135deg, #6B21A8 0%, #4C1D95 100%);
         }
         .card-hover {
             transition: all 0.3s ease;
@@ -188,7 +188,7 @@ try {
         <div class="container mx-auto px-6 py-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center">
-                    <i class="fas fa-graduation-cap text-2xl text-blue-400 mr-2"></i>
+                    <i class="fas fa-graduation-cap text-2xl text-purple-300 mr-2"></i>
                     <span class="font-semibold text-xl tracking-tight">DropTrace</span>
                 </div>
                 <div class="flex items-center space-x-6">
@@ -258,11 +258,11 @@ try {
                                         <textarea id="answer_<?php echo $question['id']; ?>" 
                                                   name="answer" 
                                                   rows="3" 
-                                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                                   placeholder="Enter your answer here..."></textarea>
                                     </div>
                                     <button type="submit" 
-                                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
                                         Submit Answer
                                     </button>
                                 </form>
@@ -285,14 +285,14 @@ try {
                     <div class="flex items-center justify-center w-full">
                         <label for="pdf_file" class="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition duration-300">
                             <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                                <i class="fas fa-file-pdf text-5xl text-blue-500 mb-4"></i>
+                                <i class="fas fa-file-pdf text-5xl text-purple-500 mb-4"></i>
                                 <p class="mb-2 text-lg text-gray-600">Click to upload or drag and drop</p>
                                 <p class="text-sm text-gray-500">PDF files only</p>
                             </div>
                             <input id="pdf_file" name="pdf_file" type="file" class="hidden" accept=".pdf" />
                         </label>
                     </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl transition duration-300 transform hover:scale-105">
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded-xl transition duration-300 transform hover:scale-105">
                         <i class="fas fa-upload mr-2"></i>Upload PDF
                     </button>
                 </form>
@@ -310,7 +310,7 @@ try {
 
                 <?php if (empty($pdfs)): ?>
                     <div class="text-center py-16">
-                        <i class="fas fa-file-pdf text-6xl text-blue-400 mb-6"></i>
+                        <i class="fas fa-file-pdf text-6xl text-purple-400 mb-6"></i>
                         <p class="text-xl text-gray-600 mb-4">No PDFs uploaded yet</p>
                         <p class="text-gray-500">Upload your first PDF document to get started</p>
                     </div>
@@ -320,14 +320,14 @@ try {
                             <div class="bg-gray-50 rounded-xl p-6 card-hover">
                                 <div class="flex items-start justify-between mb-6">
                                     <div class="flex items-start">
-                                        <i class="fas fa-file-pdf text-3xl text-blue-500 mr-4 mt-1"></i>
+                                        <i class="fas fa-file-pdf text-3xl text-purple-500 mr-4 mt-1"></i>
                                         <div>
                                             <h3 class="text-lg font-semibold text-gray-800 mb-1"><?php echo htmlspecialchars($pdf['original_name']); ?></h3>
                                             <p class="text-sm text-gray-500">Uploaded <?php echo date('M d, Y', strtotime($pdf['upload_date'])); ?></p>
                                         </div>
                                     </div>
                                     <a href="uploads/pdfs/<?php echo htmlspecialchars($pdf['file_name']); ?>" 
-                                       class="text-blue-500 hover:text-blue-600 transition duration-300"
+                                       class="text-purple-500 hover:text-purple-600 transition duration-300"
                                        target="_blank">
                                         <i class="fas fa-eye"></i>
                                     </a>
@@ -349,9 +349,9 @@ try {
                                             <input type="text" 
                                                    name="question" 
                                                    placeholder="Ask a question..." 
-                                                   class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                                   class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                                             <button type="submit" 
-                                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg transition duration-300">
+                                                    class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-3 rounded-lg transition duration-300">
                                                 <i class="fas fa-paper-plane"></i>
                                             </button>
                                         </div>
@@ -378,7 +378,7 @@ try {
                                                 <div class="bg-white rounded-lg p-4 shadow-sm">
                                                     <div class="flex items-start space-x-3">
                                                         <div class="flex-shrink-0">
-                                                            <i class="fas fa-question-circle text-blue-400 text-lg"></i>
+                                                            <i class="fas fa-question-circle text-purple-400 text-lg"></i>
                                                         </div>
                                                         <div class="flex-1">
                                                             <div class="text-sm text-gray-500 mb-1">
@@ -386,7 +386,7 @@ try {
                                                             </div>
                                                             <p class="text-gray-800 font-medium mb-2"><?php echo htmlspecialchars($question['question']); ?></p>
                                                             <?php if ($question['answer']): ?>
-                                                                <div class="bg-blue-50 rounded-lg p-3 mt-2">
+                                                                <div class="bg-purple-50 rounded-lg p-3 mt-2">
                                                                     <div class="text-sm text-gray-500 mb-1">
                                                                         Answered <?php echo date('M d, Y H:i', strtotime($question['answered_date'])); ?>
                                                                     </div>
