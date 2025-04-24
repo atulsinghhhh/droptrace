@@ -50,71 +50,37 @@ try {
     }
 } catch(PDOException $e) {
     $error = 'Error creating tables: ' . $e->getMessage();
-    $debug_info = 'SQL Error: ' . $e->getMessage();
 }
 
 // Handle PDF upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['pdf_file'])) {
-    $debug_info .= "File upload attempt detected.<br>";
+    $allowed_types = ['application/pdf'];
+    $max_size = 5 * 1024 * 1024; // 5MB
     
-    // Check if file was actually uploaded
-    if ($_FILES['pdf_file']['error'] !== UPLOAD_ERR_OK) {
-        $error = 'File upload error: ' . $_FILES['pdf_file']['error'];
-        $debug_info .= "Upload error code: " . $_FILES['pdf_file']['error'] . "<br>";
+    if (!in_array($_FILES['pdf_file']['type'], $allowed_types)) {
+        $error = 'Only PDF files are allowed.';
+    } elseif ($_FILES['pdf_file']['size'] > $max_size) {
+        $error = 'File size must be less than 5MB.';
     } else {
-        $debug_info .= "File uploaded successfully to temp directory.<br>";
+        $upload_dir = __DIR__ . '/uploads/pdfs/';
+        if (!file_exists($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
         
-        $allowed_types = ['application/pdf'];
-        $max_size = 5 * 1024 * 1024; // 5MB
+        $file_name = uniqid() . '_' . basename($_FILES['pdf_file']['name']);
+        $target_path = $upload_dir . $file_name;
         
-        $debug_info .= "File type: " . $_FILES['pdf_file']['type'] . "<br>";
-        $debug_info .= "File size: " . $_FILES['pdf_file']['size'] . " bytes<br>";
-        
-        if (!in_array($_FILES['pdf_file']['type'], $allowed_types)) {
-            $error = 'Only PDF files are allowed.';
-            $debug_info .= "Invalid file type.<br>";
-        } elseif ($_FILES['pdf_file']['size'] > $max_size) {
-            $error = 'File size must be less than 5MB.';
-            $debug_info .= "File too large.<br>";
+        if (move_uploaded_file($_FILES['pdf_file']['tmp_name'], $target_path)) {
+            try {
+                $stmt = $conn->prepare("INSERT INTO pdf_uploads (user_id, file_name, original_name, upload_date) VALUES (?, ?, ?, NOW())");
+                $stmt->execute([$_SESSION['user_id'], $file_name, $_FILES['pdf_file']['name']]);
+                $success = 'PDF uploaded successfully!';
+            } catch(PDOException $e) {
+                $error = 'Error storing file information in database.';
+                unlink($target_path);
+            }
         } else {
-            $upload_dir = 'uploads/pdfs/';
-            if (!file_exists($upload_dir)) {
-                if (!mkdir($upload_dir, 0777, true)) {
-                    $error = 'Failed to create upload directory.';
-                    $debug_info .= "Failed to create directory: " . $upload_dir . "<br>";
-                } else {
-                    $debug_info .= "Created upload directory: " . $upload_dir . "<br>";
-                }
-            }
-            
-            if (empty($error)) {
-                $file_name = uniqid() . '_' . basename($_FILES['pdf_file']['name']);
-                $target_path = $upload_dir . $file_name;
-                
-                $debug_info .= "Target path: " . $target_path . "<br>";
-                
-                if (move_uploaded_file($_FILES['pdf_file']['tmp_name'], $target_path)) {
-                    $debug_info .= "File moved to target location successfully.<br>";
-                    
-                    try {
-                        $stmt = $conn->prepare("INSERT INTO pdf_uploads (user_id, file_name, original_name, upload_date) VALUES (?, ?, ?, NOW())");
-                        $stmt->execute([$_SESSION['user_id'], $file_name, $_FILES['pdf_file']['name']]);
-                        $success = 'PDF uploaded successfully.';
-                        $debug_info .= "File information stored in database.<br>";
-                    } catch(PDOException $e) {
-                        $error = 'Error storing PDF information in database: ' . $e->getMessage();
-                        $debug_info .= "Database error: " . $e->getMessage() . "<br>";
-                        if (file_exists($target_path)) {
-                            unlink($target_path);
-                            $debug_info .= "Removed uploaded file due to database error.<br>";
-                        }
-                    }
-                } else {
-                    $error = 'Error moving uploaded file.';
-                    $debug_info .= "Failed to move file to target location.<br>";
-                    $debug_info .= "Upload error: " . error_get_last()['message'] . "<br>";
-                }
-            }
+            $error = 'Failed to move uploaded file.';
         }
     }
 }
@@ -130,9 +96,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question']) && isset(
         try {
             $stmt = $conn->prepare("INSERT INTO pdf_questions (pdf_id, user_id, question, asked_date) VALUES (?, ?, ?, NOW())");
             $stmt->execute([$pdf_id, $_SESSION['user_id'], $question]);
-            $success = 'Your question has been submitted. We will analyze the PDF and provide an answer soon.';
+            $success = 'Your question has been submitted. We will provide an answer soon.';
         } catch(PDOException $e) {
             $error = 'Error submitting question: ' . $e->getMessage();
+        }
+    }
+}
+
+// Handle answer submission (admin only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['answer']) && isset($_POST['question_id'])) {
+    $answer = trim($_POST['answer']);
+    $question_id = $_POST['question_id'];
+    
+    if (empty($answer)) {
+        $error = 'Please enter an answer.';
+    } else {
+        try {
+            $stmt = $conn->prepare("UPDATE pdf_questions SET answer = ?, answered_date = NOW() WHERE id = ?");
+            $stmt->execute([$answer, $question_id]);
+            $success = 'Answer has been submitted successfully!';
+        } catch(PDOException $e) {
+            $error = 'Error submitting answer: ' . $e->getMessage();
         }
     }
 }
@@ -153,6 +137,23 @@ try {
     $error = 'Error fetching PDFs: ' . $e->getMessage();
     $pdfs = [];
 }
+
+// Get all unanswered questions
+$unanswered_questions = [];
+try {
+    $stmt = $conn->prepare("
+        SELECT q.*, p.original_name as pdf_name, u.username
+        FROM pdf_questions q
+        JOIN pdf_uploads p ON q.pdf_id = p.id
+        JOIN users u ON q.user_id = u.id
+        WHERE q.answer IS NULL
+        ORDER BY q.asked_date DESC
+    ");
+    $stmt->execute();
+    $unanswered_questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch(PDOException $e) {
+    $error = 'Error fetching unanswered questions: ' . $e->getMessage();
+}
 ?>
 
 <!DOCTYPE html>
@@ -164,62 +165,40 @@ try {
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                fontFamily: {
-                    sans: ['Space Grotesk', 'sans-serif'],
-                },
-                extend: {
-                    colors: {
-                        'primary': '#08141B',
-                        'secondary': '#11212D',
-                        'tertiary': '#233745',
-                        'accent': '#4A5C6A',
-                        'light': '#9BAAAB',
-                        'lighter': '#CCD0CF',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         .drag-active {
             border-color: #4A5C6A !important;
             background-color: #233745 !important;
         }
-        .question-enter {
-            animation: slideIn 0.3s ease-out;
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
         }
-        @keyframes slideIn {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
     </style>
 </head>
-<body class="bg-lighter font-sans">
+<body class="bg-gray-50 font-sans">
     <!-- Navigation Bar -->
-    <nav class="bg-primary text-white shadow-lg fixed top-0 left-0 w-full z-50">
+    <nav class="gradient-bg text-white shadow-lg fixed top-0 left-0 w-full z-50">
         <div class="container mx-auto px-6 py-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center">
-                    <i class="fas fa-graduation-cap text-2xl text-accent mr-2"></i>
+                    <i class="fas fa-graduation-cap text-2xl text-blue-400 mr-2"></i>
                     <span class="font-semibold text-xl tracking-tight">DropTrace</span>
                 </div>
                 <div class="flex items-center space-x-6">
-                    <a href="index.php" class="text-light hover:text-white font-medium">Home</a>
-                    <a href="analysis.php" class="text-light hover:text-white font-medium">Analysis</a>
-                    <a href="intervensions.php" class="text-light hover:text-white font-medium">Interventions</a>
-                    <a href="aboutus.php" class="text-light hover:text-white font-medium">About Us</a>
+                    <a href="index.php" class="text-gray-300 hover:text-white transition duration-300">Home</a>
+                    <a href="analysis.php" class="text-gray-300 hover:text-white transition duration-300">Analysis</a>
+                    <a href="intervensions.php" class="text-gray-300 hover:text-white transition duration-300">Interventions</a>
+                    <a href="aboutus.php" class="text-gray-300 hover:text-white transition duration-300">About Us</a>
                     <a href="pdf_analysis.php" class="text-white font-medium">PDF Analysis</a>
-                    <a href="profile.php" class="text-light hover:text-white font-medium">Profile</a>
-                    <a href="logout.php" class="text-light hover:text-white font-medium">Logout</a>
+                    <a href="profile.php" class="text-gray-300 hover:text-white transition duration-300">Profile</a>
+                    <a href="logout.php" class="text-gray-300 hover:text-white transition duration-300">Logout</a>
                 </div>
             </div>
         </div>
@@ -227,105 +206,139 @@ try {
 
     <!-- Main Content -->
     <div class="container mx-auto px-6 py-24">
-        <div class="max-w-4xl mx-auto">
+        <div class="max-w-6xl mx-auto">
             <!-- Header -->
-            <div class="text-center mb-12">
-                <h1 class="text-4xl font-bold text-primary mb-4">PDF Analysis</h1>
-                <p class="text-xl text-secondary">Upload and analyze PDF documents for student data</p>
+            <div class="text-center mb-16">
+                <h1 class="text-5xl font-bold text-gray-800 mb-4">PDF Analysis</h1>
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">Upload and analyze PDF documents to extract valuable insights about student data</p>
             </div>
 
             <!-- Alerts -->
             <?php if ($error): ?>
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
-                    <span class="block sm:inline"><?php echo $error; ?></span>
-                    <?php if ($debug_info): ?>
-                        <div class="mt-2 text-sm">
-                            <p class="font-semibold">Debug Information:</p>
-                            <p class="mt-1"><?php echo $debug_info; ?></p>
-                        </div>
-                    <?php endif; ?>
+                <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-r-lg" role="alert">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-circle mr-2"></i>
+                        <span><?php echo $error; ?></span>
+                    </div>
                 </div>
             <?php endif; ?>
             
             <?php if ($success): ?>
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6" role="alert">
-                    <span class="block sm:inline"><?php echo $success; ?></span>
+                <div class="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 mb-8 rounded-r-lg" role="alert">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        <span><?php echo $success; ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- Unanswered Questions Section -->
+            <?php if (!empty($unanswered_questions)): ?>
+                <div class="bg-white rounded-2xl shadow-xl p-8 mb-12">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Questions Waiting for Answers</h2>
+                    <div class="space-y-6">
+                        <?php foreach ($unanswered_questions as $question): ?>
+                            <div class="bg-gray-50 rounded-xl p-6">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-800 mb-1"><?php echo htmlspecialchars($question['pdf_name']); ?></h3>
+                                        <p class="text-sm text-gray-500">Asked by <?php echo htmlspecialchars($question['username']); ?></p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">
+                                        <?php echo date('M d, Y H:i', strtotime($question['asked_date'])); ?>
+                                    </span>
+                                </div>
+                                <div class="mb-4">
+                                    <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($question['question']); ?></p>
+                                </div>
+                                <form action="" method="POST" class="space-y-4">
+                                    <input type="hidden" name="question_id" value="<?php echo $question['id']; ?>">
+                                    <div>
+                                        <label for="answer_<?php echo $question['id']; ?>" class="block text-sm font-medium text-gray-700 mb-2">Provide Answer</label>
+                                        <textarea id="answer_<?php echo $question['id']; ?>" 
+                                                  name="answer" 
+                                                  rows="3" 
+                                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                  placeholder="Enter your answer here..."></textarea>
+                                    </div>
+                                    <button type="submit" 
+                                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                                        Submit Answer
+                                    </button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             <?php endif; ?>
 
             <!-- Upload Form -->
-            <div class="bg-white rounded-xl shadow-lg p-8 mb-12">
-                <h2 class="text-2xl font-bold text-primary mb-6">Upload PDF</h2>
+            <div class="bg-white rounded-2xl shadow-xl p-8 mb-12 card-hover">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800">Upload PDF</h2>
+                    <div class="text-sm text-gray-500">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Max file size: 5MB
+                    </div>
+                </div>
                 <form action="" method="POST" enctype="multipart/form-data" class="space-y-6" id="uploadForm">
                     <div class="flex items-center justify-center w-full">
-                        <label for="pdf_file" id="dropZone" class="flex flex-col items-center justify-center w-full h-64 border-2 border-accent border-dashed rounded-lg cursor-pointer bg-tertiary hover:bg-secondary transition duration-300">
+                        <label for="pdf_file" class="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition duration-300">
                             <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                                <i class="fas fa-file-pdf text-4xl text-accent mb-3"></i>
-                                <p class="mb-2 text-sm text-light">Click to upload or drag and drop</p>
-                                <p class="text-xs text-light">PDF files only (MAX. 5MB)</p>
+                                <i class="fas fa-file-pdf text-5xl text-blue-500 mb-4"></i>
+                                <p class="mb-2 text-lg text-gray-600">Click to upload or drag and drop</p>
+                                <p class="text-sm text-gray-500">PDF files only</p>
                             </div>
-                            <input id="pdf_file" name="pdf_file" type="file" class="hidden" accept=".pdf" required />
+                            <input id="pdf_file" name="pdf_file" type="file" class="hidden" accept=".pdf" />
                         </label>
                     </div>
-                    <div id="filePreview" class="hidden">
-                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div class="flex items-center">
-                                <i class="fas fa-file-pdf text-2xl text-accent mr-3"></i>
-                                <div>
-                                    <p class="text-sm font-medium text-primary" id="fileName"></p>
-                                    <p class="text-xs text-secondary" id="fileSize"></p>
-                                </div>
-                            </div>
-                            <button type="button" id="removeFile" class="text-red-500 hover:text-red-700">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <button type="submit" id="uploadButton" class="w-full bg-accent hover:bg-tertiary text-white font-bold py-3 px-6 rounded-lg transition duration-300">
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl transition duration-300 transform hover:scale-105">
                         <i class="fas fa-upload mr-2"></i>Upload PDF
                     </button>
                 </form>
             </div>
 
             <!-- PDF List -->
-            <div class="bg-white rounded-xl shadow-lg p-8">
-                <h2 class="text-2xl font-bold text-primary mb-6">Your Uploaded PDFs</h2>
+            <div class="bg-white rounded-2xl shadow-xl p-8">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800">Your Uploaded PDFs</h2>
+                    <div class="text-sm text-gray-500">
+                        <i class="fas fa-file-pdf mr-1"></i>
+                        <?php echo count($pdfs); ?> documents
+                    </div>
+                </div>
+
                 <?php if (empty($pdfs)): ?>
-                    <div class="text-center py-12">
-                        <i class="fas fa-file-pdf text-4xl text-accent mb-4"></i>
-                        <p class="text-secondary">No PDFs uploaded yet.</p>
+                    <div class="text-center py-16">
+                        <i class="fas fa-file-pdf text-6xl text-blue-400 mb-6"></i>
+                        <p class="text-xl text-gray-600 mb-4">No PDFs uploaded yet</p>
+                        <p class="text-gray-500">Upload your first PDF document to get started</p>
                     </div>
                 <?php else: ?>
-                    <div class="space-y-6" id="pdfList">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <?php foreach ($pdfs as $pdf): ?>
-                            <div class="border border-gray-200 rounded-lg p-6 hover:shadow-md transition duration-300 pdf-card">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div class="flex items-center">
-                                        <i class="fas fa-file-pdf text-2xl text-accent mr-3"></i>
+                            <div class="bg-gray-50 rounded-xl p-6 card-hover">
+                                <div class="flex items-start justify-between mb-6">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-file-pdf text-3xl text-blue-500 mr-4 mt-1"></i>
                                         <div>
-                                            <h3 class="text-lg font-semibold text-primary"><?php echo htmlspecialchars($pdf['original_name']); ?></h3>
-                                            <p class="text-sm text-secondary">Uploaded on <?php echo date('M d, Y H:i', strtotime($pdf['upload_date'])); ?></p>
+                                            <h3 class="text-lg font-semibold text-gray-800 mb-1"><?php echo htmlspecialchars($pdf['original_name']); ?></h3>
+                                            <p class="text-sm text-gray-500">Uploaded <?php echo date('M d, Y', strtotime($pdf['upload_date'])); ?></p>
                                         </div>
                                     </div>
-                                    <div class="flex space-x-2">
-                                        <a href="uploads/pdfs/<?php echo htmlspecialchars($pdf['file_name']); ?>" 
-                                           class="text-accent hover:text-tertiary"
-                                           target="_blank">
-                                            <i class="fas fa-eye mr-1"></i>View
-                                        </a>
-                                        <a href="analyze_pdf.php?id=<?php echo $pdf['id']; ?>" 
-                                           class="text-accent hover:text-tertiary">
-                                            <i class="fas fa-chart-bar mr-1"></i>Analyze
-                                        </a>
-                                    </div>
+                                    <a href="uploads/pdfs/<?php echo htmlspecialchars($pdf['file_name']); ?>" 
+                                       class="text-blue-500 hover:text-blue-600 transition duration-300"
+                                       target="_blank">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
                                 </div>
 
                                 <!-- Questions Section -->
-                                <div class="mt-4">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h4 class="text-md font-semibold text-primary">Questions & Answers</h4>
-                                        <span class="text-sm text-secondary">
-                                            <?php echo $pdf['answered_count']; ?> of <?php echo $pdf['question_count']; ?> answered
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="text-md font-semibold text-gray-800">Questions & Answers</h4>
+                                        <span class="text-sm text-gray-500">
+                                            <?php echo $pdf['answered_count']; ?>/<?php echo $pdf['question_count']; ?> answered
                                         </span>
                                     </div>
 
@@ -335,11 +348,11 @@ try {
                                         <div class="flex space-x-2">
                                             <input type="text" 
                                                    name="question" 
-                                                   placeholder="Ask a question about this PDF..." 
-                                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent">
+                                                   placeholder="Ask a question..." 
+                                                   class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                             <button type="submit" 
-                                                    class="bg-accent hover:bg-tertiary text-white px-4 py-2 rounded-lg transition duration-300">
-                                                <i class="fas fa-paper-plane mr-1"></i>Ask
+                                                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg transition duration-300">
+                                                <i class="fas fa-paper-plane"></i>
                                             </button>
                                         </div>
                                     </form>
@@ -362,26 +375,37 @@ try {
                                     <?php if (!empty($questions)): ?>
                                         <div class="space-y-4">
                                             <?php foreach ($questions as $question): ?>
-                                                <div class="border-l-4 border-accent pl-4">
-                                                    <div class="text-sm text-secondary mb-1">
-                                                        Asked on <?php echo date('M d, Y H:i', strtotime($question['asked_date'])); ?>
-                                                    </div>
-                                                    <p class="text-primary font-medium mb-2"><?php echo htmlspecialchars($question['question']); ?></p>
-                                                    <?php if ($question['answer']): ?>
-                                                        <div class="bg-gray-50 p-3 rounded-lg">
-                                                            <div class="text-sm text-secondary mb-1">
-                                                                Answered on <?php echo date('M d, Y H:i', strtotime($question['answered_date'])); ?>
-                                                            </div>
-                                                            <p class="text-primary"><?php echo htmlspecialchars($question['answer']); ?></p>
+                                                <div class="bg-white rounded-lg p-4 shadow-sm">
+                                                    <div class="flex items-start space-x-3">
+                                                        <div class="flex-shrink-0">
+                                                            <i class="fas fa-question-circle text-blue-400 text-lg"></i>
                                                         </div>
-                                                    <?php else: ?>
-                                                        <p class="text-sm text-secondary">Answer pending...</p>
-                                                    <?php endif; ?>
+                                                        <div class="flex-1">
+                                                            <div class="text-sm text-gray-500 mb-1">
+                                                                Asked <?php echo date('M d, Y H:i', strtotime($question['asked_date'])); ?>
+                                                            </div>
+                                                            <p class="text-gray-800 font-medium mb-2"><?php echo htmlspecialchars($question['question']); ?></p>
+                                                            <?php if ($question['answer']): ?>
+                                                                <div class="bg-blue-50 rounded-lg p-3 mt-2">
+                                                                    <div class="text-sm text-gray-500 mb-1">
+                                                                        Answered <?php echo date('M d, Y H:i', strtotime($question['answered_date'])); ?>
+                                                                    </div>
+                                                                    <p class="text-gray-800"><?php echo htmlspecialchars($question['answer']); ?></p>
+                                                                </div>
+                                                            <?php else: ?>
+                                                                <div class="bg-gray-50 rounded-lg p-3 mt-2">
+                                                                    <p class="text-sm text-gray-500">Answer pending...</p>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php else: ?>
-                                        <p class="text-sm text-secondary">No questions asked yet.</p>
+                                        <div class="text-center py-4">
+                                            <p class="text-gray-500">No questions asked yet</p>
+                                        </div>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -392,216 +416,58 @@ try {
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer class="bg-secondary text-white py-12">
-        <div class="container mx-auto px-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 tracking-tight">DropTrace</h3>
-                    <p class="text-light leading-relaxed">
-                        Identifying and supporting at-risk students through data analysis.
-                    </p>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 tracking-tight">Quick Links</h3>
-                    <ul class="space-y-2">
-                        <li><a href="index.php" class="text-light hover:text-white font-medium">Home</a></li>
-                        <li><a href="analysis.php" class="text-light hover:text-white font-medium">Analysis</a></li>
-                        <li><a href="intervensions.php" class="text-light hover:text-white font-medium">Interventions</a></li>
-                        <li><a href="aboutus.php" class="text-light hover:text-white font-medium">About Us</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 tracking-tight">Resources</h3>
-                    <ul class="space-y-2">
-                        <li><a href="https://github.com/saiteja2108/DROPOUT-ANALYSIS" class="text-light hover:text-white font-medium" target="_blank">Git Hub</a></li>
-                        <li><a href="https://www.kaggle.com/code/jeevabharathis/student-dropout-analysis-for-school-education" target="_blank" class="text-light hover:text-white font-medium">Kaggle</a></li>
-                        <li><a href="https://www.data.gov.in/keywords/Dropout" class="text-light hover:text-white font-medium" target="_blank">Government Website</a></li>
-                        <li><a href="faq.php" class="text-light hover:text-white font-medium">FAQ</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 tracking-tight">Contact Us</h3>
-                    <ul class="space-y-2 text-light">
-                        <li class="flex items-start">
-                            <i class="fas fa-envelope mt-1 mr-2"></i>
-                            <a href="mailto:dropoutanalysisofficial@gmail.com" class="text-light hover:text-white">dropoutanalysisofficial@gmail.com</a>
-                        </li>
-                        <li class="flex items-start">
-                            <i class="fas fa-phone-alt mt-1 mr-2"></i>
-                            <a href="tel:+917836912212" class="text-light hover:text-white">+91 7836912212</a>
-                        </li>
-                        <li class="flex items-start">
-                            <i class="fas fa-map-marker-alt mt-1 mr-2"></i>
-                            <span>Lovely Professional University<br>Phagwara, Punjab</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            <div class="border-t border-tertiary mt-12 pt-8 text-center text-light">
-                <p>&copy; <?= date('Y') ?> Student Dropout Analysis System. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
-
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Drag and drop functionality
-            const dropZone = document.getElementById('dropZone');
-            const fileInput = document.getElementById('pdf_file');
-            const filePreview = document.getElementById('filePreview');
-            const fileName = document.getElementById('fileName');
-            const fileSize = document.getElementById('fileSize');
-            const removeFile = document.getElementById('removeFile');
-            const uploadButton = document.getElementById('uploadButton');
-
-            // Prevent default drag behaviors
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-                document.body.addEventListener(eventName, preventDefaults, false);
-            });
-
-            // Highlight drop zone when item is dragged over it
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, highlight, false);
-            });
-
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, unhighlight, false);
-            });
-
-            // Handle dropped files
-            dropZone.addEventListener('drop', handleDrop, false);
-
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
+        // Handle file input change
+        document.getElementById('pdf_file').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            if (fileName) {
+                const label = this.parentElement;
+                label.querySelector('p:first-of-type').textContent = fileName;
             }
-
-            function highlight(e) {
-                dropZone.classList.add('drag-active');
-            }
-
-            function unhighlight(e) {
-                dropZone.classList.remove('drag-active');
-            }
-
-            function handleDrop(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                handleFiles(files);
-            }
-
-            function handleFiles(files) {
-                if (files.length > 0) {
-                    const file = files[0];
-                    if (file.type === 'application/pdf') {
-                        fileInput.files = files;
-                        showFilePreview(file);
-                    } else {
-                        alert('Please upload a PDF file only.');
-                    }
-                }
-            }
-
-            function showFilePreview(file) {
-                fileName.textContent = file.name;
-                fileSize.textContent = formatFileSize(file.size);
-                filePreview.classList.remove('hidden');
-                uploadButton.disabled = false;
-            }
-
-            function formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
-
-            // Handle file input change
-            fileInput.addEventListener('change', function() {
-                if (this.files.length > 0) {
-                    handleFiles(this.files);
-                }
-            });
-
-            // Handle file removal
-            removeFile.addEventListener('click', function() {
-                fileInput.value = '';
-                filePreview.classList.add('hidden');
-                uploadButton.disabled = true;
-            });
-
-            // Question submission handling
-            const questionForms = document.querySelectorAll('form[action=""]');
-            questionForms.forEach(form => {
-                form.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    const formData = new FormData(this);
-                    const questionInput = this.querySelector('input[name="question"]');
-                    const question = questionInput.value.trim();
-
-                    if (question) {
-                        fetch('', {
-                            method: 'POST',
-                            body: formData
-                        })
-                        .then(response => response.text())
-                        .then(html => {
-                            // Create a temporary container
-                            const temp = document.createElement('div');
-                            temp.innerHTML = html;
-
-                            // Find the new question in the response
-                            const newQuestion = temp.querySelector('.question-enter');
-                            if (newQuestion) {
-                                // Add the new question to the questions list
-                                const questionsList = this.nextElementSibling.querySelector('.space-y-4') || 
-                                                    this.nextElementSibling.querySelector('.text-sm');
-                                if (questionsList) {
-                                    if (questionsList.classList.contains('text-sm')) {
-                                        questionsList.outerHTML = '<div class="space-y-4">' + newQuestion.outerHTML + '</div>';
-                                    } else {
-                                        questionsList.insertAdjacentHTML('afterbegin', newQuestion.outerHTML);
-                                    }
-                                }
-                            }
-
-                            // Clear the input
-                            questionInput.value = '';
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            alert('An error occurred while submitting your question.');
-                        });
-                    }
-                });
-            });
-
-            // PDF card animations
-            const pdfCards = document.querySelectorAll('.pdf-card');
-            pdfCards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                setTimeout(() => {
-                    card.style.transition = 'all 0.3s ease-out';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
-
-            // File size validation
-            const maxSize = 5 * 1024 * 1024; // 5MB
-            fileInput.addEventListener('change', function() {
-                if (this.files[0].size > maxSize) {
-                    alert('File size must be less than 5MB.');
-                    this.value = '';
-                    filePreview.classList.add('hidden');
-                    uploadButton.disabled = true;
-                }
-            });
         });
+
+        // Handle drag and drop
+        const dropZone = document.querySelector('label[for="pdf_file"]');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('drag-active');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('drag-active');
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            document.getElementById('pdf_file').files = files;
+            
+            const fileName = files[0]?.name;
+            if (fileName) {
+                dropZone.querySelector('p:first-of-type').textContent = fileName;
+            }
+        }
     </script>
 </body>
-</html> 
+</html>
+
+
